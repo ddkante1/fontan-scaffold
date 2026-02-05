@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 
+
 def clear_scene():
     # Delete all objects
     for obj in list(bpy.data.objects):
@@ -171,14 +172,53 @@ def setup_medical_lighting(strength_key=800, strength_fill=400, strength_back=30
 
 clear_scene()
 
-setup_lighting_from_config(params)
+# --- Load config ---
+with open("config.json") as f:
+    config = json.load(f)
 
-# --- Import sac and arteries ---
-arteries = import_mesh(aneurysm_paths[0])
-arteries.name = "Fontan_arteries"
-assign_artery_material(aneurysm_sac, "TranslucentMaterial", (1.0, 0.2, 0.2, 0.25))  # brighter red
+artery_path = config["artery_path"][0]
+scaffold_dir = config["scaffold_dir"]
 
-arteries = bpy.data.objects.get("AneurysmSac")
+# --- Import artery ---
+bpy.ops.import_mesh.stl(filepath=artery_path)
+artery = bpy.context.selected_objects[0]
 
+# --- Get all STL files in the scaffold directory ---
+scaffold_files = sorted(glob.glob(os.path.join(scaffold_dir, "*.stl")))
+
+# --- Import scaffolds and store as objects ---
+scaffolds = []
+for i, f in enumerate(scaffold_files):
+    bpy.ops.import_mesh.stl(filepath=f)
+    obj = bpy.context.selected_objects[0]
+    obj.name = f"scaffold_{i}"
+    obj.hide_render = True  # hide initially
+    scaffolds.append(obj)
+
+scale_factor = 1000.0
+
+for obj in scaffolds:
+    obj.scale = (obj.scale[0] * scale_factor,
+                 obj.scale[1] * scale_factor,
+                 obj.scale[2] * scale_factor)
+    
+for obj in scaffolds:
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
+    bpy.ops.object.transform_apply(scale=True)
+    obj.select_set(False)
+    
+# --- Animate scaffolds over time ---
+frame_start = 1
+frame_gap = 10  # frames between each timestep
+
+for i, obj in enumerate(scaffolds):
+    # Hide before this frame
+    obj.hide_render = True
+    obj.keyframe_insert(data_path="hide_render", frame=frame_start + i*frame_gap - 1)
+
+    # Show at this frame
+    obj.hide_render = False
+    obj.keyframe_insert(data_path="hide_render", frame=frame_start + i*frame_gap)
 
     
