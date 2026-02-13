@@ -2,8 +2,29 @@
     "artery_path": [
         "/Users/daviduva/Fontan_data/CompleteModel_Fontan_47mm_Smoothed.stl"
     ],
-    "scaffold_dir": [    
-        "/Users/daviduva/Fontan_data/scaffolds/l13_mesh/",
-    ],
-    "centerline_paths": []
+    "scaffold_dir":  "/Users/daviduva/Fontan_data/scaffolds/l13_mesh/",
+    "centerline_paths": ["/Users/daviduva/Fontan_data/centerlines.vtk/"],
+
+    "output_path":"/Users/daviduva/Fontan_data/ouput/renders/",
+
+    "target_name":"artery",
+    "use_hdri": true,
+    "hdr_image_path": "/Users/daviduva/FontanScaffold/studio_small_01_4k.hdr",
+    "hdr_strength": 0.6,
+    "hdr_rotation": 1.57,
+    "use_three_point": true,
+    "light_amplification": 2.0,
+    "light_distance":5.0,
+
+    "camera_distance_factor": 2.25,
+    "camera_height_factor": 0.15,
+    "camera_orientation":"front",
+    "image_resolution_scaling": 40,
+    "number_of_render_samples": 100,
+
+    "make_animation": false,
+    "animation_number_of_frames": 200,   
+    "close_up": true,
+    "zoom_camera_in": false,
+    "render_test": true
 }
