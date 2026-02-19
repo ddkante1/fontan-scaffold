@@ -1,13 +1,20 @@
+import sys
+sys.path.append("/Users/daviduva/.local/lib/python3.11/site-packages")
+import subprocess
 import bpy
 import bmesh    
 import mathutils
 from mathutils import Vector
+import numpy as np
 import math
 from math import radians
 import json
 import os
 import glob
 import subprocess
+import vtk
+
+print(vtk.vtkVersion().GetVTKVersion())
 
 # --- Load config ---
 with open("my_config.json") as f:
@@ -15,6 +22,7 @@ with open("my_config.json") as f:
 
 artery_path = config["artery_path"][0]
 scaffold_dir = config["scaffold_dir"]
+centerline_csv_paths = config.get("centerline_csv_path", [])
 
 distance_factor = config.get("camera_distance_factor", 2.0)
 height_factor = config.get("camera_height_factor", 0.15)
@@ -31,6 +39,10 @@ number_of_frames= config.get("animation_number_of_frames", 250)
 close_up = config.get("close_up", True)
 render_test = config.get("render_test", False)
 target_name = config.get("target","Coil1") ## target for the camera and lighting
+
+# Safely get CSV path from config_path")
+if not centerline_csv_paths:
+    raise ValueError("No centerline CSV paths provided in config.")
 
 def clear_scene():
     # Delete all objects
@@ -396,7 +408,139 @@ def set_render_settigs ():
     bpy.context.scene.render.image_settings.color_mode = 'RGBA'  # include alpha channel
     bpy.context.scene.render.image_settings.color_depth = '8'     # or '16' for higher quality
 
+def load_centerline_vtk(path):
+    """
+    Load a VTK PolyData centerline file and return Nx3 numpy array of points.
+    """
+    reader = vtk.vtkPolyDataReader()
+    reader.SetFileName(path)
+    reader.Update()
 
+    polydata = reader.GetOutput()
+    points = polydata.GetPoints()
+
+    if points is None:
+        raise ValueError(f"No points found in {path}")
+
+    centerline = np.array([
+        points.GetPoint(i)
+        for i in range(points.GetNumberOfPoints())
+    ])
+
+    return centerline
+
+
+
+    centerlines = config.get("centerline_vtk_paths", [])
+
+    for path in centerlines:
+        cl = load_centerline_vtk(path)
+        centerlines.append(cl)
+
+    points = [Vector(p) for p in centerline]
+
+    print(f"Loaded {len(points)} points from centerline CSV.")
+
+    # Create new curve data block
+    curve_data = bpy.data.curves.new(name="CenterlineCurve", type='CURVE')
+    curve_data.dimensions = '3D'
+    curve_data.resolution_u = 2
+
+    # Create spline
+    spline = curve_data.splines.new(type='POLY')
+    spline.points.add(len(centerline) - 1)
+
+    for i, point in enumerate(centerline):
+        x, y, z = point
+        spline.points[i].co = (x, y, z, 1)
+    # Create object
+    curve_obj = bpy.data.objects.new("Centerline", curve_data)
+    # Always link to Scene Collection
+    bpy.context.scene.collection.objects.link(curve_obj)
+
+    print("Object linked:", curve_obj.name)
+    print("In scene collection:",
+        curve_obj.name in bpy.context.scene.collection.objects)
+
+    # ---- Make it visible (thickness) ----
+    curve_data.bevel_depth = 0.5
+    curve_data.bevel_resolution = 4
+
+    # ---- Focus view on it ----
+    bpy.context.view_layer.objects.active = curve_obj
+    curve_obj.select_set(True)
+    bpy.ops.view3d.view_selected()
+
+    print("Centerline curve created and visible.")
+
+def create_curve_from_points(points, name="Centerline", bevel=0.5):
+
+    curve_data = bpy.data.curves.new(name, type='CURVE')
+    curve_data.dimensions = '3D'
+    curve_data.resolution_u = 2
+
+    spline = curve_data.splines.new('POLY')
+    spline.points.add(len(points) - 1)
+
+    for i, (x, y, z) in enumerate(points):
+        spline.points[i].co = (x, y, z, 1)
+
+    curve_obj = bpy.data.objects.new(name, curve_data)
+    bpy.context.scene.collection.objects.link(curve_obj)
+    curve_data.bevel_depth = bevel
+    curve_data.bevel_resolution = 4
+
+    # Focus view on object
+    bpy.context.view_layer.objects.active = curve_obj
+    curve_obj.select_set(True)
+    bpy.ops.view3d.view_selected()
+
+    return curve_obj
+
+def load_centerline_branches(path):
+
+    if not os.path.exists(path):
+        raise FileNotFoundError(path)
+
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".vtp":
+        reader = vtk.vtkXMLPolyDataReader()
+    elif ext == ".vtk":
+        reader = vtk.vtkPolyDataReader()
+    else:
+        raise ValueError(f"Unsupported extension: {ext}")
+
+    reader.SetFileName(path)
+    reader.Update()
+
+    polydata = reader.GetOutput()
+    points = polydata.GetPoints()
+    lines = polydata.GetLines()
+    lines.InitTraversal()
+
+    branches = []
+    id_list = vtk.vtkIdList()
+
+    while lines.GetNextCell(id_list):
+        branch = []
+        for i in range(id_list.GetNumberOfIds()):
+            pid = id_list.GetId(i)
+            branch.append(points.GetPoint(pid))
+        branches.append(np.array(branch))
+
+    return branches
+
+def load_centerlines_from_config(config):
+    vtk_paths = config.get("centerline_paths", [])
+    if not vtk_paths:
+        raise ValueError("No centerline_paths found in config")
+
+    for path in vtk_paths:
+        branches = load_centerline_branches(path)
+        for i, branch in enumerate(branches):
+            create_curve_from_points(branch, name=f"Branch_{i}")
+
+    print(f"Loaded {len(branches)} branches from {vtk_paths}")
 # Main loop
 
 set_render_settigs()
@@ -410,6 +554,8 @@ artery = bpy.context.selected_objects[0]
 center_object_at_origin(artery)
 
 assign_artery_material(artery, "TranslucentArtery", color=(0.85, 0.25, 0.25, 0.35) )
+
+load_centerlines_from_config(config)
                        
 place_camera()
 

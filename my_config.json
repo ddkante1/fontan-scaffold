@@ -3,7 +3,8 @@
         "/Users/daviduva/Fontan_data/CompleteModel_Fontan_47mm_Smoothed.stl"
     ],
     "scaffold_dir":  "/Users/daviduva/Fontan_data/scaffolds/l13_mesh/",
-    "centerline_paths": ["/Users/daviduva/Fontan_data/centerlines.vtk/"],
+    "centerline_paths": ["/Users/daviduva/Fontan_data/centerlines.vtk"],
+    "centerline_csv_path": ["/Users/daviduva/Fontan_data/centerline_points.csv"],
 
     "output_path":"/Users/daviduva/Fontan_data/ouput/renders/",
 
