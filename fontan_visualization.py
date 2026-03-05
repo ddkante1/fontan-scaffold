@@ -14,7 +14,6 @@ import glob
 import subprocess
 import vtk
 
-print(vtk.vtkVersion().GetVTKVersion())
 
 # --- Load config ---
 with open("my_config.json") as f:
@@ -680,12 +679,8 @@ def place_scaffold_on_branch(scaffold_obj,
 
     print("Scaffold placed at arc distance:", arc_lengths[target_idx])
 
-def orient_scaffold_to_branch(scaffold_obj,
-                              branch_points,
-                              target_idx,
-                              axis='Z'):
-
-    # --- Compute tangent ---
+def orient_scaffold_to_branch(scaffold_obj,  branch_points, target_idx,  axis='Z'):
+    #   --- Compute tangent ---
     if target_idx < len(branch_points) - 1:
         tangent = branch_points[target_idx + 1] - branch_points[target_idx]
     else:
@@ -695,8 +690,31 @@ def orient_scaffold_to_branch(scaffold_obj,
     tangent_vec = Vector(tangent)
 
     # --- Align scaffold axis to tangent ---
-    scaffold_obj.rotation_mode = 'QUATERNION'
+    scaffold_obj.rotation_mode = 'QUATERNION'#
     scaffold_obj.rotation_quaternion = tangent_vec.to_track_quat(axis, 'Y')
+
+def add_lattice_to_object(obj, lattice_name="ScaffoldLattice"):
+
+    # --- Create lattice object ---
+    bpy.ops.object.add(type='LATTICE')
+    lattice = bpy.context.object
+    lattice.name = lattice_name
+
+    # --- Match location & scale to scaffold ---
+    lattice.location = obj.location
+    lattice.scale = obj.dimensions / 2
+
+    # --- Increase resolution for smoother deformation ---
+    lattice.data.points_u = 6
+    lattice.data.points_v = 6
+    lattice.data.points_w = 10
+
+    # --- Add lattice modifier to scaffold ---
+    mod = obj.modifiers.new(name="LatticeDeform", type='LATTICE')
+    mod.object = lattice
+
+    return lattice
+  
     
 # main loop
 set_render_settigs()
@@ -763,6 +781,8 @@ for obj in scaffolds:
 
 scaffold = scaffolds[0]
 
+
+
 print("Origin location:", scaffold.location)
 print("Bounding box center:",
       sum((Vector(b) for b in scaffold.bound_box), Vector()) / 8)
@@ -813,7 +833,9 @@ orient_scaffold_to_branch(scaffold,
                               trunk,
                               target_idx,
                               axis='Z')
-    
+
+lattice = add_lattice_to_object(scaffold)
+
 # target_point = Vector(trunk[target_idx])
 
 # mw = scaffold.matrix_world.copy()
