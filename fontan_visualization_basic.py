@@ -411,14 +411,7 @@ def set_render_settigs ():
     bpy.context.scene.render.image_settings.color_mode = 'RGBA'  # include alpha channel
     bpy.context.scene.render.image_settings.color_depth = '8'     # or '16' for higher quality
 
-
-    """
-    points: Nx3 numpy array
-    returns cumulative arc length array
-    """
-    distances = np.linalg.norm(np.diff(points, axis=0), axis=1)
-    arc_lengths = np.insert(np.cumsum(distances), 0, 0)
-    return arc_lengths
+ 
 
 def get_scaffold_length(scaffold_obj, axis='Z'):
     """
@@ -501,27 +494,84 @@ def orient_scaffold_to_branch(scaffold_obj,  branch_points, target_idx,  axis='Z
 
 def add_lattice_to_object(obj, lattice_name="ScaffoldLattice"):
 
-    # --- Create lattice object ---
+    # --- Create lattice ---
     bpy.ops.object.add(type='LATTICE')
     lattice = bpy.context.object
     lattice.name = lattice_name
 
-    # --- Match location & scale to scaffold ---
-    lattice.location = obj.location
-    lattice.scale = obj.dimensions / 2
+    # --- Match transform properly ---
+    lattice.matrix_world = obj.matrix_world
 
-    # --- Increase resolution for smoother deformation ---
-    lattice.data.points_u = 6
-    lattice.data.points_v = 6
-    lattice.data.points_w = 10
+    # --- Match bounding box size ---
+    bbox = [obj.matrix_world @ v.co for v in obj.data.vertices]
+    min_corner = mathutils.Vector((min(v.x for v in bbox),  min(v.y for v in bbox),
+       min(v.z for v in bbox)))
 
-    # --- Add lattice modifier to scaffold ---
+    max_corner = mathutils.Vector((max(v.x for v in bbox),
+                               max(v.y for v in bbox),
+                               max(v.z for v in bbox)))
+
+
+    center = (min_corner + max_corner) / 2
+    size = (max_corner - min_corner) / 2
+
+    margin = 2.0 # make lattice bigger
+
+    lattice.location = center
+    lattice.scale = size * margin
+
+    # --- Resolution ---
+    lattice.data.points_u = 10
+    lattice.data.points_v = 10
+    lattice.data.points_w = 20
+
+    # --- Parent lattice to object ---
+    lattice.parent = obj
+
+    # --- Add modifier ---
     mod = obj.modifiers.new(name="LatticeDeform", type='LATTICE')
     mod.object = lattice
 
     return lattice
   
-    
+def add_cylinder_from_object(obj, name="ScaffoldCylinder"):
+
+    # Get world-space bounding box
+    bbox = [obj.matrix_world @ v.co for v in obj.data.vertices]
+
+    min_corner = mathutils.Vector((
+        min(v.x for v in bbox),
+        min(v.y for v in bbox),
+        min(v.z for v in bbox)
+    ))
+
+    max_corner = mathutils.Vector((
+        max(v.x for v in bbox),
+        max(v.y for v in bbox),
+        max(v.z for v in bbox)
+    ))
+
+    center = (min_corner + max_corner) / 2
+    size = max_corner - min_corner
+
+    radius = max(size.x, size.y) / 2
+    height = size.z
+
+    radius *= 1.1
+    height *= 1.05
+
+    # Create cylinder
+    bpy.ops.mesh.primitive_cylinder_add(
+        radius=radius,
+        depth=height,
+        location=center
+    )
+
+    cyl = bpy.context.object
+    cyl.name = name
+
+    return cyl  
+
 # main loop
 set_render_settigs()
 clear_scene()
@@ -585,7 +635,9 @@ for obj in scaffolds:
 
 scaffold = scaffolds[0]
 
+add_lattice_to_object(scaffold, lattice_name="ScaffoldLattice")
 
+add_cylinder_from_object(scaffold, name="ScaffoldCylinder")
 
 print("Origin location:", scaffold.location)
 print("Bounding box center:",
