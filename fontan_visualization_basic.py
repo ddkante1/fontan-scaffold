@@ -557,8 +557,8 @@ def add_cylinder_from_object(obj, name="ScaffoldCylinder"):
     radius = max(size.x, size.y) / 2
     height = size.z
 
-    radius *= 1.1
-    height *= 1.05
+    radius *= 1.0
+    height *= 1.0
 
     # Create cylinder
     bpy.ops.mesh.primitive_cylinder_add(
